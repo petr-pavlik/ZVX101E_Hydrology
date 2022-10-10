@@ -1,0 +1,62 @@
+---
+title: "Hydrology "
+output: html_notebook
+---
+
+#### The Hydrology Session A
+
+
+```{r setup}
+library(tidyverse)
+```
+
+
+```{r file download}
+url <- "https://hydrology.nws.noaa.gov/pub/gcip/mopex/US_Data/Us_438_Daily/01200000.dly" # this is the unique web location of the file
+dt <- read.fwf(file = url, 
+               widths = c(8, rep(10, times = 5)), 
+               col.names = c("Date", "Prec", "PET", "Discharge", "Tmax", "Tmin"))
+```
+
+We downloaded and loaded the data set directly using website url. Since it is a fixed width format, we need to use specific function in order to properly load the format.
+
+```{r reshape}
+dt <- dt |> 
+  mutate(Date = gsub(x = Date, pattern = " ", replacement = "0")) |> 
+  mutate(Date = as.Date(Date, format = "%Y%m%d"))
+```
+
+Now we can work on some exploratory data analysis processes (visualisations, statistics, tests). Within the `tidyverse` package space a pipe operator ` |> ` plays vital role. It bear the logic of sending results of previous function call as data input to next step.
+
+```{r}
+dt |>                                                                           # pipe the dataset further to grouping function 
+  group_by(Mon = lubridate::month(Date)) |>                                     # begin with grouping to months since our aim is monthly stats
+  summarize(Prec = mean(Prec)) |>                                               # summarize function allows computations on selected variables
+  ggplot() +
+  geom_col(aes(x = as.factor(Mon), 
+               y = Prec, 
+               group = 1), 
+           width = 0.2, 
+           color = "darkblue") +
+  scale_x_discrete(labels = 1:12, breaks = 1:12) +                              # months are integers - so we specify x-axis format 
+  theme_minimal() +                                                             # adopt visually simple theme
+  xlab("Month") +                                                               # changes the label of x-axis 
+  ylab("Mean precipitation total [mm]")                                         # changes the label of y-axis 
+  
+```
+
+```{r}
+dt |> 
+  group_by(Mon = lubridate::month(Date), 
+           Year = lubridate::year(Date)) |> 
+  summarize(Tmin = mean(Tmin), 
+            Tmax = mean(Tmax)) |> 
+  pivot_longer(-c(Mon, Year)) |> 
+  ggplot(aes(x = as.factor(Mon), 
+             y = value, 
+             color = name)) +
+  theme_minimal() +
+  scale_color_discrete("red", "blue") +
+  geom_boxplot()
+```
+
