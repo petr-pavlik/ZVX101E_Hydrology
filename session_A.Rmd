@@ -14,8 +14,10 @@ rather is it a collection of packages with the same shared philosophy.
 
 ```{r setup}
 # check if the package needs to be installed, then load the package
-if(!"tidyverse" %in% installed.packages()[, 1]) install.packages("tidyverse")
-library(tidyverse)
+for(i in c("tidyverse", "data.table", "lubridate")) {
+  if(!(i %in% installed.packages()[, 1])) install.packages(i)
+  library(i, character.only = TRUE)
+}
 ```
 
 Now specify url and download the file from that location.
@@ -24,7 +26,8 @@ Now specify url and download the file from that location.
 url <- "https://hydrology.nws.noaa.gov/pub/gcip/mopex/US_Data/Us_438_Daily/01200000.dly" # this is the unique web location of the file
 dt <- read.fwf(file = url,                                                               # we are reading the fixed width column format
                widths = c(8, rep(10, times = 5)),                                        # so we need to specify number and width of the columns
-               col.names = c("Date", "Prec", "PET", "Discharge", "Tmax", "Tmin"))        # it is convenient to name them while loading
+               col.names = c("Date", "Prec", "PET", "Discharge", "Tmax", "Tmin")) |>     # it is convenient to name them while loading
+  as.data.table()
 ```
 
 We downloaded and loaded the data set directly using website URL. Since it is a 
@@ -49,12 +52,10 @@ accordingly.
 ```{r checks}
 dt |> 
   sapply(FUN = range)                                                           # simplified apply of range function on dt variables  
-  
-
 ```
 
 Two things can be seen. The Date has seemingly wrong values, but that is due to 
-internal representation of the timedate format, so it is actually not wrong. But 
+internal representation of the datetime format, so it is actually not wrong. But 
 the secondly the minimum of Discharge is -99 and that tackles a clear physical 
 boundary, so we can assume that the value represents missing values or flawed
 measurements and we treat them.
@@ -65,7 +66,35 @@ dt <- dt |>
 
 dt |> ggplot(aes(x = Date, y = Discharge)) +
   geom_line() +
-  theme_minimal()
+  theme_minimal() +
+  ylab("Discharge [mm]")
+```
+
+
+### Hydrological year
+
+In the Czechia it is defined form the first of November to the last of October.
+
+```{r HYr definition}
+dt <- dt |> 
+  mutate(HYr = ifelse(month(Date) > 10, 
+                      year(Date) + 1, 
+                      year(Date)))
+```
+
+
+
+
+```{r}
+dt |> 
+  group_by(lubridate::year(Date)) |>                                            # for each year
+  summarize(n = n()) |>                                                         # let's count entries
+  distinct(n)                                                                   # there is a full time series, just observations are missing
+
+dt |>                                                                     # reduce dt to only those years with full records of Disch
+  filter(!year(Date) %in% {
+    unique(dt[is.na(Discharge), HYr])  
+})
 ```
 
 
@@ -86,19 +115,22 @@ dt |>                                                                           
   
 ```
 
+
 ```{r}
 dt |> 
   group_by(Mon = lubridate::month(Date), 
            Year = lubridate::year(Date)) |> 
   summarize(Tmin = mean(Tmin), 
             Tmax = mean(Tmax)) |> 
-  pivot_longer(-c(Mon, Year)) |> 
+  pivot_longer(-c(Mon, Year), names_to = "Variable") |> 
   ggplot(aes(x = as.factor(Mon), 
              y = value, 
-             color = name)) +
+             color = Variable)) +
   theme_minimal() +
-  scale_color_discrete("red", "blue") +
-  geom_boxplot()
+  geom_boxplot() +
+  xlab("Month") +
+  ylab("Temperature [\u00B0C]") +
+  scale_color_manual(values = c("orange", "dodgerblue3"))
 ```
 
 $$
@@ -108,25 +140,15 @@ $$
 ```{r runoff coefficient}
 # since we are missing some days with measurements, we would like to include only complete years into our analysis
 dt |> 
-  group_by(Yr = lubridate::year(Date)) |> 
+  filter(!HYr %in% {
+    unique(dt[is.na(Discharge), HYr])  
+}) |> 
+  group_by(HYr) |> 
   mutate(Yr_Prec = sum(Prec), Yr_Disch = sum(Discharge), phi = Yr_Disch/Yr_Prec) |> 
-  ungroup() |> 
-  distinct(Yr, phi) |> 
-  ggplot(aes(x = Yr, y = phi)) +
+  # ungroup() |> 
+  distinct(HYr, phi) |> 
+  ggplot(aes(x = HYr, y = phi)) +
   geom_col()
-
-ggplot() +
-  geom_vline(xintercept = 0) +
-  geom_hline(yintercept = 0) +
-  theme_minimal()
-
-
-
-
 ```
 
-```{r}
-dt |> 
-  glimpse()
-```
 
