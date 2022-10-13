@@ -5,28 +5,69 @@ output: html_notebook
 
 #### The Hydrology Session A
 
+This session contains some elementary Exploratory data analysis (EDA) procedures. 
+These procedures contain basic plotting and representative statistics computing.
+
+The main recent data analysis development in R evolves around the `tidyverse` 
+package. The package itself is not a single package with distinct functionality, 
+rather is it a collection of packages with the same shared philosophy.
 
 ```{r setup}
+# check if the package needs to be installed, then load the package
+if(!"tidyverse" %in% installed.packages()[, 1]) install.packages("tidyverse")
 library(tidyverse)
 ```
 
+Now specify url and download the file from that location.
 
 ```{r file download}
 url <- "https://hydrology.nws.noaa.gov/pub/gcip/mopex/US_Data/Us_438_Daily/01200000.dly" # this is the unique web location of the file
-dt <- read.fwf(file = url, 
-               widths = c(8, rep(10, times = 5)), 
-               col.names = c("Date", "Prec", "PET", "Discharge", "Tmax", "Tmin"))
+dt <- read.fwf(file = url,                                                               # we are reading the fixed width column format
+               widths = c(8, rep(10, times = 5)),                                        # so we need to specify number and width of the columns
+               col.names = c("Date", "Prec", "PET", "Discharge", "Tmax", "Tmin"))        # it is convenient to name them while loading
 ```
 
-We downloaded and loaded the data set directly using website url. Since it is a fixed width format, we need to use specific function in order to properly load the format.
+We downloaded and loaded the data set directly using website URL. Since it is a 
+fixed width format, we need to use specific function in order to properly load 
+the format. Now we need to adjust the data a bit. R does now how to treat Date 
+format. If specified we gain the ability to conveniently aggregate and process 
+and it is also a good practice to lock the values in specified assumptions 
+as much as possible.
 
-```{r reshape}
+```{r date reshape}
 dt <- dt |> 
-  mutate(Date = gsub(x = Date, pattern = " ", replacement = "0")) |> 
-  mutate(Date = as.Date(Date, format = "%Y%m%d"))
+  mutate(Date = gsub(x = Date, pattern = " ", replacement = "0")) |>            # first find and replace all empty spaces in the raw character format
+  mutate(Date = as.Date(Date, format = "%Y%m%d"))                               # change the character to Date by specifying Date internal formatting
 ```
 
-Now we can work on some exploratory data analysis processes (visualisations, statistics, tests). Within the `tidyverse` package space a pipe operator ` |> ` plays vital role. It bear the logic of sending results of previous function call as data input to next step.
+Now we can work on some exploratory data analysis processes (visualization, statistics, tests). 
+Within the `tidyverse` package space a pipe operator ` |> ` plays vital role. 
+It bear the logic of sending results of previous function call as data input to next step.
+At first it is necessary to check the consistency and quality of the data and act
+accordingly.
+
+```{r checks}
+dt |> 
+  sapply(FUN = range)                                                           # simplified apply of range function on dt variables  
+  
+
+```
+
+Two things can be seen. The Date has seemingly wrong values, but that is due to 
+internal representation of the timedate format, so it is actually not wrong. But 
+the secondly the minimum of Discharge is -99 and that tackles a clear physical 
+boundary, so we can assume that the value represents missing values or flawed
+measurements and we treat them.
+
+```{r}
+dt <- dt |> 
+  mutate(Discharge = na_if(Discharge, "-99"))
+
+dt |> ggplot(aes(x = Date, y = Discharge)) +
+  geom_line() +
+  theme_minimal()
+```
+
 
 ```{r}
 dt |>                                                                           # pipe the dataset further to grouping function 
@@ -58,5 +99,34 @@ dt |>
   theme_minimal() +
   scale_color_discrete("red", "blue") +
   geom_boxplot()
+```
+
+$$
+\varphi = \dfrac{\text{total runoff}}{\text{total precipitation}}\quad\text{(per year)}
+$$
+
+```{r runoff coefficient}
+# since we are missing some days with measurements, we would like to include only complete years into our analysis
+dt |> 
+  group_by(Yr = lubridate::year(Date)) |> 
+  mutate(Yr_Prec = sum(Prec), Yr_Disch = sum(Discharge), phi = Yr_Disch/Yr_Prec) |> 
+  ungroup() |> 
+  distinct(Yr, phi) |> 
+  ggplot(aes(x = Yr, y = phi)) +
+  geom_col()
+
+ggplot() +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = 0) +
+  theme_minimal()
+
+
+
+
+```
+
+```{r}
+dt |> 
+  glimpse()
 ```
 
