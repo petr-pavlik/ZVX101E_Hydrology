@@ -1,2 +1,2 @@
 # ZVX101E_Hydrology
-ZVX101E_Hydrology supplementary material
+ZVX101E Hydrology & ZVX108E Hydrology courses supplementary material

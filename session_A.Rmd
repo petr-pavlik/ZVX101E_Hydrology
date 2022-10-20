@@ -148,7 +148,8 @@ dt |>
   # ungroup() |> 
   distinct(HYr, phi) |> 
   ggplot(aes(x = HYr, y = phi)) +
-  geom_col()
+  geom_col() +
+  scale_x_date("1 year")
 ```
 
 
