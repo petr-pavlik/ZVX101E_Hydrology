@@ -130,7 +130,8 @@ dt |>
   geom_boxplot() +
   xlab("Month") +
   ylab("Temperature [\u00B0C]") +
-  scale_color_manual(values = c("orange", "dodgerblue3"))
+  scale_color_manual(values = c("orange", "dodgerblue3")) +
+  ggtitle("Monthly temperatures")
 ```
 
 $$
@@ -149,7 +150,60 @@ dt |>
   distinct(HYr, phi) |> 
   ggplot(aes(x = HYr, y = phi)) +
   geom_col() +
-  scale_x_date("1 year")
+  theme_minimal() +
+  ylab("Runoff coefficient \u03C6 [-]") +
+  xlab("Year")
 ```
 
+Histogram is a type of diagram where one axis (usually x) represents class bins, or ranges
+and the other axis is frequency of the values insisde those classes/bins.
+
+```{r histogram}
+dt |> 
+  mutate(Decade = year(Date) - year(Date) %% 10) |> 
+  select(-Date) |> 
+  pivot_longer(-Decade, names_to = "Variable") |> 
+  filter(Variable %in% c("PET", "Discharge")) |> 
+  ggplot() +
+  geom_histogram(aes(value), bins = 100) +
+  geom_rug(aes(value), col = "red") +
+  facet_wrap(Variable ~ Decade) 
+```
+
+### Exceedance curve and frequency distribution curve
+
+The exceedance curve indicates how long for a given year the water level was above 
+a certain threshold.
+
+```{r Exceedance curve and Empirical distribution curve}
+dt |> 
+  filter(HYr == 1950) |> 
+  mutate(Rnk = rank(Discharge), Prob = (Rnk - 0.3)/(length(Discharge) + 0.4)) |> 
+  ggplot() +
+  geom_line(aes(x = Discharge, y = Prob)) +
+  ylab(bquote("P \u2264 x(k)"))
+```
+
+
+```{r Exceedance curve and Frequency distribution curve 2}
+dt |> 
+  filter(HYr == 1950) |> 
+  mutate(Rnk = rank(Tmax), Prob = (Rnk - 0.3)/(length(Tmax) + 0.4)) |> 
+  ggplot() +
+  geom_line(aes(x = Tmax, y = 1 - Prob)) +
+  ylab("P > x(k)")
+```
+
+```{r flow durationccurve}
+library(scales)
+M <- c(30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 355, 364)
+
+dt |> 
+  drop_na() |> 
+  summarize(M = M, Mq = quantile(Discharge, 1 - M/365.25)) |> 
+  ggplot() +
+  geom_path(aes(as.factor(M), Mq, group = 1)) +
+  xlab("M-day") +
+  ylab("R [mm]")
+```
 
